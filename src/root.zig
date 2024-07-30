@@ -110,6 +110,56 @@ pub const World = struct {
     }
 };
 
+const EntityID = u64;
+
+// TODO: transition to DynamicBitSet (runtime set size)
+const MAX_COMPONENTS = 32;
+const ComponentMask = std.bit_set.ArrayBitSet(u64, MAX_COMPONENTS);
+
+pub fn get_id(comptime _: type) EntityID {
+    const state = struct {
+        var next_id: u64 = 0;
+    };
+    defer state.next_id += 1;
+    return state.next_id;
+}
+
+pub const Entity = struct {
+    id: EntityID,
+    mask: ComponentMask,
+};
+
+pub const Scene = struct {
+    entities: std.ArrayList(Entity),
+
+    pub fn init(allocator: std.mem.Allocator) Scene {
+        return .{ .entities = std.ArrayList(Entity).init(allocator) };
+    }
+
+    pub fn deinit(self: *const Scene) void {
+        self.entities.deinit();
+    }
+
+    pub fn spawn(self: *Scene) !EntityID {
+        try self.entities.append(Entity{
+            .id = self.entities.items.len,
+            .mask = ComponentMask.initEmpty(),
+        });
+
+        return self.entities.getLast().id;
+    }
+
+    pub fn add_component(self: *Scene, comptime Component: type, entity: EntityID) void {
+        const component_id = get_id(Component);
+        self.entities.items[entity].mask.set(component_id);
+    }
+
+    pub fn remove_component(self: *Scene, comptime Component: type, entity: EntityID) void {
+        const component_id = get_id(Component);
+        self.entities.items[entity].mask.unset(component_id);
+    }
+};
+
 pub fn print_sdl_error() void {
     std.debug.print("[SDL]: {s}\n", .{c.SDL_GetError()});
 }

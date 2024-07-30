@@ -23,7 +23,7 @@ pub fn main() !void {
 
     const triangle = zeta.Shape{ .triangle = zeta.Triangle{ .vertices = [3]zeta.Vertex{
         zeta.Vertex{ .x = 0, .y = 0 },
-        zeta.Vertex{ .x = width, .y = height },
+        zeta.Vertex{ .x = width / 2, .y = height / 2 },
         zeta.Vertex{ .x = width, .y = 0 },
     } } };
 
@@ -51,6 +51,19 @@ pub fn main() !void {
 
     try world.shapes.append(triangle);
     try world.shapes.append(circle);
+
+    var scene = zeta.Scene.init(gpa.allocator());
+    defer scene.deinit();
+
+    const entity = try scene.spawn();
+
+    const Transform = struct {
+        position: zeta.Vertex,
+        rotation: zeta.Vertex,
+    };
+
+    scene.add_component(Transform, entity);
+    scene.remove_component(Transform, entity);
 
     while (true) {
         var event: c.SDL_Event = undefined;
