@@ -131,13 +131,18 @@ pub const Entity = struct {
 
 pub const Scene = struct {
     entities: std.ArrayList(Entity),
+    component_pools: std.ArrayList(ComponentPool),
 
     pub fn init(allocator: std.mem.Allocator) Scene {
-        return .{ .entities = std.ArrayList(Entity).init(allocator) };
+        return .{
+            .entities = std.ArrayList(Entity).init(allocator),
+            .component_pools = std.ArrayList(ComponentPool).init(allocator),
+        };
     }
 
     pub fn deinit(self: *const Scene) void {
         self.entities.deinit();
+        self.component_pools.deinit();
     }
 
     pub fn spawn(self: *Scene) !EntityID {
@@ -149,14 +154,54 @@ pub const Scene = struct {
         return self.entities.getLast().id;
     }
 
-    pub fn add_component(self: *Scene, comptime Component: type, entity: EntityID) void {
+    pub fn add_component(self: *Scene, comptime Component: type, entity: EntityID, allocator: std.mem.Allocator) !*Component {
         const component_id = get_id(Component);
+        const pools_count: i64 = @intCast(self.component_pools.items.len);
+        const current_max_held_component_id = pools_count - 1;
+
+        if (component_id > current_max_held_component_id) {
+            const new_pool = ComponentPool.init(allocator);
+            // TODO: this resize causes ptr invalidation
+            try self.component_pools.resize(component_id + 1);
+            try self.component_pools.insert(component_id, new_pool);
+
+            const new_component = try allocator.create(Component);
+            try self.component_pools.items[component_id].data.insert(component_id, new_component);
+        }
         self.entities.items[entity].mask.set(component_id);
+        return @alignCast(@ptrCast(self.component_pools.items[component_id].data.items[component_id]));
     }
 
     pub fn remove_component(self: *Scene, comptime Component: type, entity: EntityID) void {
         const component_id = get_id(Component);
         self.entities.items[entity].mask.unset(component_id);
+    }
+
+    pub fn get_component_for_entity(self: *const Scene, comptime Component: type, id: EntityID) ?*Component {
+        const component_id = get_id(Component);
+        if (!self.entities.items[id].mask.isSet(component_id)) {
+            return null;
+        }
+
+        return @alignCast(@ptrCast(self.component_pools.items[component_id].data.items[id]));
+    }
+};
+
+pub const ComponentPool = struct {
+    data: std.ArrayList(*anyopaque),
+
+    pub fn init(allocator: std.mem.Allocator) ComponentPool {
+        return .{ .data = std.ArrayList(*anyopaque).init(allocator) };
+    }
+
+    pub fn deinit(self: *const ComponentPool) void {
+        // TODO: deinit owned components inside the pool
+        // components are type-erased, so figure out a way to store the deinit fn
+        self.data.deinit();
+    }
+
+    pub fn get(self: *const ComponentPool, index: usize) *anyopaque {
+        return self.data.items[index];
     }
 };
 

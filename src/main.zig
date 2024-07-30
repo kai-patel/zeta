@@ -62,7 +62,8 @@ pub fn main() !void {
         rotation: zeta.Vertex,
     };
 
-    scene.add_component(Transform, entity);
+    _ = try scene.add_component(Transform, entity, gpa.allocator());
+    _ = scene.get_component_for_entity(Transform, entity);
     scene.remove_component(Transform, entity);
 
     while (true) {
